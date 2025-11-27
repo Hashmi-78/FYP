@@ -1,0 +1,20 @@
+{% load static %}
+
+<nav class="navbar">
+    <div class="container">
+        <a href="/" class="navbar-brand">Ahyera Store</a>
+
+        <ul class="navbar-nav">
+            <li><a href="/">Home</a></li>
+            <li><a href="{% url 'products:list' %}">Products</a></li>
+            <li><a href="#">Categories</a></li>
+            {% if user.is_authenticated %}
+                <li><a href="#">Dashboard</a></li>
+                <li><a href="{% url 'authentication:logout' %}">Logout</a></li>
+            {% else %}
+                <li><a href="{% url 'authentication:login' %}">Login</a></li>
+                <li><a href="{% url 'authentication:register' %}">Register</a></li>
+            {% endif %}
+        </ul>
+    </div>
+</nav>

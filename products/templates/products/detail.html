@@ -1,0 +1,203 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ product.name }} - Ahyera Store</title>
+    <link href="{% static 'css/output.css' %}" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+
+<body class="bg-gray-50">
+
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+
+        <!-- Breadcrumb -->
+        <nav class="mb-6 text-sm">
+            <a href="{% url 'products:list' %}" class="text-blue-600 hover:underline">Products</a>
+            <span class="mx-2">/</span>
+            <a href="{% url 'products:list' %}?category={{ product.category.slug }}"
+                class="text-blue-600 hover:underline">{{ product.category.name }}</a>
+            <span class="mx-2">/</span>
+            <span class="text-gray-600">{{ product.name }}</span>
+        </nav>
+
+        <!-- Product Details -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 bg-white rounded-2xl shadow-lg p-8 mb-10">
+
+            <!-- Product Images -->
+            <div>
+                <div class="mb-4">
+                    {% if product.main_image %}
+                    <img src="{{ product.main_image.url }}" alt="{{ product.name }}"
+                        class="w-full h-96 object-cover rounded-lg">
+                    {% else %}
+                    <div class="w-full h-96 bg-gray-200 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-image text-6xl text-gray-400"></i>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Additional Images -->
+                <div class="grid grid-cols-4 gap-2">
+                    {% if product.image_2 %}
+                    <img src="{{ product.image_2.url }}" alt="{{ product.name }}"
+                        class="w-full h-20 object-cover rounded cursor-pointer">
+                    {% endif %}
+                    {% if product.image_3 %}
+                    <img src="{{ product.image_3.url }}" alt="{{ product.name }}"
+                        class="w-full h-20 object-cover rounded cursor-pointer">
+                    {% endif %}
+                    {% if product.image_4 %}
+                    <img src="{{ product.image_4.url }}" alt="{{ product.name }}"
+                        class="w-full h-20 object-cover rounded cursor-pointer">
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Product Info -->
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-4">{{ product.name }}</h1>
+
+                <!-- Rating -->
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="flex text-yellow-400 text-lg">
+                        {% for i in "12345" %}
+                        {% if forloop.counter <= product.rating %} <i class="fas fa-star"></i>
+                            {% else %}
+                            <i class="far fa-star"></i>
+                            {% endif %}
+                            {% endfor %}
+                    </div>
+                    <span class="text-gray-600">({{ product.num_reviews }} reviews)</span>
+                </div>
+
+                <!-- Price -->
+                <div class="mb-6">
+                    {% if product.discount_percentage > 0 %}
+                    <div class="flex items-center gap-3">
+                        <span class="text-4xl font-bold text-blue-900">₨{{ product.get_discount_price|floatformat:0
+                            }}</span>
+                        <span class="text-xl text-gray-400 line-through">₨{{ product.price|floatformat:0 }}</span>
+                        <span class="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">-{{
+                            product.discount_percentage }}%</span>
+                    </div>
+                    {% else %}
+                    <span class="text-4xl font-bold text-blue-900">₨{{ product.price|floatformat:0 }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Stock Status -->
+                <div class="mb-6">
+                    {% if product.stock > 0 %}
+                    <span class="text-green-600 font-semibold">
+                        <i class="fas fa-check-circle"></i> In Stock ({{ product.stock }} available)
+                    </span>
+                    {% else %}
+                    <span class="text-red-600 font-semibold">
+                        <i class="fas fa-times-circle"></i> Out of Stock
+                    </span>
+                    {% endif %}
+                </div>
+
+                <!-- Description -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Description</h3>
+                    <p class="text-gray-600">{{ product.description }}</p>
+                </div>
+
+                <!-- Product Details -->
+                <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-bold text-gray-800 mb-3">Product Details</h3>
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div><span class="font-semibold">Category:</span> {{ product.category.name }}</div>
+                        {% if product.brand %}
+                        <div><span class="font-semibold">Brand:</span> {{ product.brand }}</div>
+                        {% endif %}
+                        <div><span class="font-semibold">SKU:</span> {{ product.sku }}</div>
+                        <div><span class="font-semibold">Seller:</span> {{ product.seller.username }}</div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex gap-4">
+                    <button
+                        class="flex-1 bg-blue-900 text-white px-8 py-4 rounded-lg hover:bg-blue-800 transition font-bold text-lg">
+                        <i class="fas fa-shopping-cart mr-2"></i>Add to Cart
+                    </button>
+                    <button class="bg-gray-200 text-gray-700 px-6 py-4 rounded-lg hover:bg-gray-300 transition">
+                        <i class="fas fa-heart"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reviews Section -->
+        {% if reviews %}
+        <div class="bg-white rounded-2xl shadow-lg p-8 mb-10">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Customer Reviews</h2>
+
+            <div class="space-y-6">
+                {% for review in reviews %}
+                <div class="border-b pb-6 last:border-b-0">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div
+                            class="w-10 h-10 bg-blue-900 rounded-full flex items-center justify-center text-white font-bold">
+                            {{ review.user.username|slice:":1"|upper }}
+                        </div>
+                        <div>
+                            <div class="font-semibold">{{ review.user.username }}</div>
+                            <div class="flex text-yellow-400 text-sm">
+                                {% for i in "12345" %}
+                                {% if forloop.counter <= review.rating %} <i class="fas fa-star"></i>
+                                    {% else %}
+                                    <i class="far fa-star"></i>
+                                    {% endif %}
+                                    {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <h4 class="font-semibold mb-1">{{ review.title }}</h4>
+                    <p class="text-gray-600">{{ review.comment }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Related Products -->
+        {% if related_products %}
+        <div class="mb-10">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Related Products</h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {% for related in related_products %}
+                <a href="{% url 'products:detail' related.slug %}"
+                    class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition">
+                    <div class="h-48 bg-gray-200">
+                        {% if related.main_image %}
+                        <img src="{{ related.main_image.url }}" alt="{{ related.name }}"
+                            class="w-full h-full object-cover">
+                        {% else %}
+                        <div class="w-full h-full flex items-center justify-center">
+                            <i class="fas fa-image text-4xl text-gray-400"></i>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="p-4">
+                        <h3 class="font-bold text-gray-800 mb-2 line-clamp-2">{{ related.name }}</h3>
+                        <p class="text-blue-900 font-bold text-lg">₨{{ related.price|floatformat:0 }}</p>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+
+</body>
+
+</html>

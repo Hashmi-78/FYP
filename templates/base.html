@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ahyera Store{% endblock %}</title>
+    
+    {% load static %}
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{% static 'css/output.css' %}">
+    {% block extra_css %}{% endblock %}
+    
+   
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 lg:px-6">
+            <div class="flex items-center justify-between py-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                        AS
+                    </div>
+                    <span class="text-xl lg:text-2xl font-bold text-gray-800">Ahyera Store</span>
+                </div>
+
+                <div class="flex items-center gap-6">
+                    <a href="/" class="text-gray-700 font-medium hover:text-blue-600 transition">Home</a>
+                    <a href="{% url 'products:list' %}" class="text-gray-700 font-medium hover:text-blue-600 transition">Products</a>
+                    
+                    {% if user.is_authenticated %}
+                        <span class="text-gray-700">Hello, {{ user.username }}</span>
+                        <a href="{% url 'authentication:logout' %}" class="bg-red-600 text-white px-6 py-2 rounded-full font-medium hover:bg-red-700 transition">
+                            Logout
+                        </a>
+                    {% else %}
+                        <a href="{% url 'authentication:login' %}" class="bg-blue-600 text-white px-6 py-2 rounded-full font-medium hover:bg-blue-700 transition">
+                            Login
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="flex-1">
+        {% block content %}
+        {% endblock %}
+    </main>
+    
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 lg:px-6">
+            <div class="text-center">
+                <div class="flex items-center justify-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-xl font-bold">
+                        AS
+                    </div>
+                    <span class="text-xl font-bold">Ahyera Store</span>
+                </div>
+                <p class="text-gray-400 mb-4">Your trusted shopping partner</p>
+                <p class="text-gray-400 text-sm">&copy; 2025 Ahyera Store. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- JavaScript -->
+    <script src="{% static 'js/main.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
