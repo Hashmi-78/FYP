@@ -83,9 +83,13 @@ class Product(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
-        if not self.sku:
-            self.sku = f'PRD-{self.id or ""}-{slugify(self.name)[:20]}'
+
+        creating = self.pk is None
         super().save(*args, **kwargs)
+
+        if (creating or not self.sku) and not self.sku:
+            self.sku = f'PRD-{self.id}-{slugify(self.name)[:20]}'
+            super().save(update_fields=['sku'])
     
     def get_discount_price(self):
         """Calculate discounted price"""

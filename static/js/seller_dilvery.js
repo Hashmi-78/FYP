@@ -1,22 +1,17 @@
-const cities = {
-  Lahore:     { lat: 31.5204, lng: 74.3587 },
-  Karachi:    { lat: 24.8607, lng: 67.0011 },
-  Islamabad:  { lat: 33.6844, lng: 73.0479 },
-  Faisalabad: { lat: 31.4504, lng: 73.1350 },
-  Multan:     { lat: 30.1575, lng: 71.5249 },
-  Sahiwal:    { lat: 30.6680, lng: 73.1113 },
-  Sialkot:    { lat: 32.4945, lng: 74.5229 },
-  Gujranwala: { lat: 32.1877, lng: 74.1945 },
-  Rawalpindi: { lat: 33.5651, lng: 73.0169 },
-  Peshawar:   { lat: 34.0151, lng: 71.5249 }
-};
+const citiesEl = document.getElementById('delivery-cities-data');
+let cities = {};
+try {
+  cities = citiesEl ? JSON.parse(citiesEl.textContent || '{}') : {};
+} catch (e) {
+  cities = {};
+}
 
 let map, marker, circle;
 
 function initMap() {
   map = L.map('map').setView([31.0, 70.0], 6);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '© CartoDB'
+    attribution: 'CartoDB',
   }).addTo(map);
 }
 
@@ -78,17 +73,22 @@ function saveSettings() {
 }
 
 // Events
-document.getElementById('baseCity').addEventListener('change', updateAll);
-document.getElementById('radiusSlider').addEventListener('input', updateAll);
+const baseCityEl = document.getElementById('baseCity');
+const radiusSliderEl = document.getElementById('radiusSlider');
+if (baseCityEl) baseCityEl.addEventListener('change', updateAll);
+if (radiusSliderEl) radiusSliderEl.addEventListener('input', updateAll);
 
 // Load saved
 window.onload = () => {
+  const mapEl = document.getElementById('map');
+  if (!mapEl) return;
   initMap();
+
   const city = localStorage.getItem('deliveryCity');
   const radius = localStorage.getItem('deliveryRadius');
-  if (city) {
-    document.getElementById('baseCity').value = city;
-    if (radius) document.getElementById('radiusSlider').value = radius;
+  if (city && baseCityEl) {
+    baseCityEl.value = city;
+    if (radius && radiusSliderEl) radiusSliderEl.value = radius;
     updateAll();
   }
 };

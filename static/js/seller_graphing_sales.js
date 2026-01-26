@@ -1,21 +1,39 @@
-// Dummy Data
+// Get data from server-provided JSON payloads
+const dailyEl = document.getElementById('daily-sales-data');
+const monthlyEl = document.getElementById('monthly-sales-data');
+const topProductsEl = document.getElementById('top-products-data');
+
+let dailyRows = [];
+let monthlyRows = [];
+let topProducts = [];
+
+try {
+  dailyRows = dailyEl ? JSON.parse(dailyEl.textContent || '[]') : [];
+} catch (e) {
+  dailyRows = [];
+}
+
+try {
+  monthlyRows = monthlyEl ? JSON.parse(monthlyEl.textContent || '[]') : [];
+} catch (e) {
+  monthlyRows = [];
+}
+
+try {
+  topProducts = topProductsEl ? JSON.parse(topProductsEl.textContent || '[]') : [];
+} catch (e) {
+  topProducts = [];
+}
+
 const dailyData = {
-  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  values: [42000, 58000, 65000, 48000, 92000, 110000, 85000]
+  labels: dailyRows.map((r) => (r.date ? String(r.date) : '')),
+  values: dailyRows.map((r) => Number(r.total_sales || 0)),
 };
 
 const monthlyData = {
-  labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-  values: [180000, 220000, 195000, 280000, 320000, 410000, 385000, 420000, 398000, 450000, 520000, 485000]
+  labels: monthlyRows.map((r) => (r.month ? String(r.month).slice(0, 7) : '')),
+  values: monthlyRows.map((r) => Number(r.total_sales || 0)),
 };
-
-const topProducts = [
-  { name: "iPhone 15 Pro", sold: 342, revenue: 485000 },
-  { name: "Samsung S24 Ultra", sold: 298, revenue: 398000 },
-  { name: "MacBook Air M3", sold: 189, revenue: 285000 },
-  { name: "AirPods Pro 2", sold: 412, revenue: 168000 },
-  { name: "Sony WH-1000XM5", sold: 267, revenue: 142000 }
-];
 
 // Daily Chart
 new Chart(document.getElementById('dailyChart'), {
@@ -61,18 +79,24 @@ new Chart(document.getElementById('monthlyChart'), {
 
 // Top Products
 const topDiv = document.getElementById('topProducts');
-topProducts.forEach((p, i) => {
-  const div = document.createElement('div');
-  div.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg border';
-  div.innerHTML = `
-    <div class="flex items-center gap-3">
-      <span class="text-2xl font-bold text-blue-900">${i+1}</span>
-      <div>
-        <p class="font-bold text-gray-800">${p.name}</p>
-        <p class="text-xs text-gray-600">${p.sold} units sold</p>
+if (topDiv) {
+  topDiv.innerHTML = '';
+  topProducts.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg border';
+    const productName = p.product__name || p.name || '';
+    const sold = Number(p.quantity_sold || p.sold || 0);
+    const revenue = Number(p.revenue || 0);
+    div.innerHTML = `
+      <div class="flex items-center gap-3">
+        <span class="text-2xl font-bold text-blue-900">${i + 1}</span>
+        <div>
+          <p class="font-bold text-gray-800">${productName}</p>
+          <p class="text-xs text-gray-600">${sold} units sold</p>
+        </div>
       </div>
-    </div>
-    <p class="font-bold text-blue-900">₨${p.revenue.toLocaleString()}</p>
-  `;
-  topDiv.appendChild(div);
-});
+      <p class="font-bold text-blue-900">₨${revenue.toLocaleString()}</p>
+    `;
+    topDiv.appendChild(div);
+  });
+}

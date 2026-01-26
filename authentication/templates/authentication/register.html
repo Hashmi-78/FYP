@@ -54,8 +54,59 @@
       <h2 class="text-3xl font-bold text-gray-900 mb-2">Create Account</h2>
       <p class="text-gray-600 mb-5 text-sm">Join us today and get started</p>
 
+      {% if messages %}
+        <div class="space-y-2 mb-4">
+          {% for message in messages %}
+            <div class="px-4 py-3 rounded-xl text-sm border bg-gray-50 text-gray-800">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if form and form.errors %}
+        <div class="space-y-2 mb-4">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}
+              <div class="px-4 py-3 rounded-xl text-sm border bg-red-50 text-red-800">
+                {{ error }}
+              </div>
+            {% endfor %}
+          {% endfor %}
+        </div>
+      {% endif %}
+
       <form method="post" class="space-y-4">
         {% csrf_token %}
+
+        <!-- User Type Selection -->
+        <div class="flex gap-6 justify-center mb-2">
+          <label
+            class="flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-2 rounded-lg border hover:bg-gray-100 transition">
+            <input type="radio" name="user_type" value="customer" checked onchange="toggleSellerFields()"
+              class="w-4 h-4 text-blue-600">
+            <span class="font-medium text-gray-700">I am a Customer</span>
+          </label>
+          <label
+            class="flex items-center gap-2 cursor-pointer bg-gray-50 px-4 py-2 rounded-lg border hover:bg-gray-100 transition">
+            <input type="radio" name="user_type" value="seller" onchange="toggleSellerFields()"
+              class="w-4 h-4 text-blue-600">
+            <span class="font-medium text-gray-700">I am a Seller</span>
+          </label>
+        </div>
+
+        <!-- Seller Fields Container -->
+        <div id="seller-fields" class="space-y-4 hidden border-l-4 border-blue-600 pl-4 py-2 bg-blue-50 rounded-r-lg">
+          <h3 class="text-sm font-bold text-blue-800 uppercase tracking-wide">Business Details</h3>
+          <input type="text" name="business_name" placeholder="Business Name"
+            class="w-full px-4 py-3 rounded-xl border text-sm focus:ring-2 focus:ring-blue-600 focus:border-transparent">
+
+          <input type="text" name="address" placeholder="Business Address"
+            class="w-full px-4 py-3 rounded-xl border text-sm focus:ring-2 focus:ring-blue-600 focus:border-transparent">
+
+          <input type="text" name="city" placeholder="City"
+            class="w-full px-4 py-3 rounded-xl border text-sm focus:ring-2 focus:ring-blue-600 focus:border-transparent">
+        </div>
 
         <!-- First + Last Name in Flex instead of Grid -->
         <div class="flex flex-col sm:flex-row gap-3">
@@ -128,6 +179,23 @@
     function toggleC() {
       const x = document.getElementById('cpass');
       x.type = x.type === 'password' ? 'text' : 'password';
+    }
+
+    function toggleSellerFields() {
+      const userType = document.querySelector('input[name="user_type"]:checked').value;
+      const sellerFields = document.getElementById('seller-fields');
+      const inputs = sellerFields.querySelectorAll('input');
+
+      if (userType === 'seller') {
+        sellerFields.classList.remove('hidden');
+        inputs.forEach(input => input.required = true);
+        // Also make phone required for sellers
+        document.querySelector('input[name="phone"]').required = true;
+      } else {
+        sellerFields.classList.add('hidden');
+        inputs.forEach(input => input.required = false);
+        document.querySelector('input[name="phone"]').required = false;
+      }
     }
   </script>
 

@@ -1,42 +1,15 @@
-let products = [
-  {
-    id: 1,
-    title: "Wireless Bluetooth Headphones",
-    category: "Electronics",
-    description: "Premium sound quality with noise cancellation",
-    price: 4500,
-    discount: 3999,
-    stock: 15,
-    active: true,
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800"
-  },
-  {
-    id: 2,
-    title: "Men's Casual Shirt",
-    category: "Fashion",
-    description: "100% cotton, comfortable fit",
-    price: 2500,
-    discount: 1899,
-    stock: 3,
-    active: true,
-    image: "https://zellbury.com/cdn/shop/files/MCS221012-ai.png?v=1752319130"
-  },
-  {
-    id: 3,
-    title: "Smart Watch Series 8",
-    category: "Electronics",
-    description: "Fitness tracking + heart rate monitor",
-    price: 12000,
-    discount: null,
-    stock: 0,
-    active: false,
-    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800"
-  }
-];
+const productsEl = document.getElementById('seller-products-data');
+let products = [];
+try {
+  products = productsEl ? JSON.parse(productsEl.textContent || '[]') : [];
+} catch (e) {
+  products = [];
+}
 
 // Render all products
 function renderProducts() {
   const container = document.getElementById('productsContainer');
+  if (!container) return;
   container.innerHTML = '';
 
   products.forEach(p => {
@@ -103,10 +76,14 @@ function updateStats() {
   const low = products.filter(p => p.stock > 0 && p.stock <= 5).length;
   const out = products.filter(p => p.stock === 0).length;
 
-  document.getElementById('totalProducts').textContent = total;
-  document.getElementById('activeProducts').textContent = active;
-  document.getElementById('lowStock').textContent = low;
-  document.getElementById('outOfStock').textContent = out;
+  const totalEl = document.getElementById('totalProducts');
+  const activeEl = document.getElementById('activeProducts');
+  const lowEl = document.getElementById('lowStock');
+  const outEl = document.getElementById('outOfStock');
+  if (totalEl) totalEl.textContent = total;
+  if (activeEl) activeEl.textContent = active;
+  if (lowEl) lowEl.textContent = low;
+  if (outEl) outEl.textContent = out;
 }
 
 // Toggle Active Status
@@ -141,8 +118,9 @@ function closeEditModal() {
 }
 
 // Save Edit
-document.getElementById('editForm').addEventListener('submit', function(e) {
+document.getElementById('editForm')?.addEventListener('submit', function (e) {
   e.preventDefault();
+
   const id = parseInt(document.getElementById('editId').value);
 
   const product = products.find(p => p.id === id);

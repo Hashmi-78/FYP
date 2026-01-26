@@ -1,32 +1,16 @@
-let conversations = [
-  {
-    customer: { id: 1, name: "Ahmad Khan", avatar: "A", lastMsg: "Bhai kab tak deliver hoga?", time: "2 min ago", unread: 3 },
-    messages: [
-      { text: "Salam bhai, order confirm kar diya hai", sender: "seller", time: "10:30 AM" },
-      { text: "Walaikum salam! Kab tak deliver hoga?", sender: "customer", time: "10:32 AM" },
-      { text: "Kal tak InshaAllah pahunch jayega", sender: "seller", time: "10:33 AM" },
-      { text: "Shukriya bhai", sender: "customer", time: "10:35 AM" }
-    ]
-  },
-  {
-    customer: { id: 2, name: "Sara Ali", avatar: "S", lastMsg: "Size available hai?", time: "1 hour ago", unread: 1 },
-    messages: [
-      { text: "Yes ma'am, Medium aur Large dono available hain", sender: "seller", time: "09:15 AM" },
-      { text: "Thanks! Large bhej den", sender: "customer", time: "09:20 AM" }
-    ]
-  },
-  {
-    customer: { id: 3, name: "Usman Butt", avatar: "U", lastMsg: "You: Payment received, shipping today", time: "Yesterday", unread: 0 },
-    messages: [
-      { text: "Payment received, shipping today", sender: "seller", time: "Yesterday" }
-    ]
-  }
-];
+const conversationsEl = document.getElementById('seller-conversations-data');
+let conversations = [];
+try {
+  conversations = conversationsEl ? JSON.parse(conversationsEl.textContent || '[]') : [];
+} catch (e) {
+  conversations = [];
+}
 
 let currentCustomer = null;
 
 function renderConversations() {
   const list = document.getElementById('conversationsList');
+  if (!list) return;
   list.innerHTML = '';
 
   let totalUnread = 0;
@@ -59,16 +43,22 @@ function renderConversations() {
   });
 
   const badge = document.getElementById('totalBadge');
-  if (totalUnread > 0) {
-    badge.textContent = totalUnread;
-    badge.classList.remove('hidden');
-  } else {
-    badge.classList.add('hidden');
+  if (badge) {
+    if (totalUnread > 0) {
+      badge.textContent = totalUnread;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
   }
 }
 
 function openChat(conv) {
   currentCustomer = conv;
+
+  if (!document.getElementById('chatWith') || !document.getElementById('messagesContainer')) {
+    return;
+  }
 
   // Desktop
   document.getElementById('chatWith').textContent = conv.customer.name;
@@ -86,12 +76,13 @@ function openChat(conv) {
 }
 
 function backToList() {
-  document.getElementById('mobileChat').classList.add('hidden');
+  document.getElementById('mobileChat')?.classList.add('hidden');
 }
 
 function renderMessages(messages) {
   const container = document.getElementById('messagesContainer');
   const mobileContainer = document.getElementById('mobileMessages');
+  if (!container) return;
   const html = messages.map(msg => `
     <div class="mb-4 flex ${msg.sender === 'seller' ? 'justify-end' : 'justify-start'}">
       <div class="${msg.sender === 'seller' ? 'bg-blue-900 text-white' : 'bg-gray-200 text-gray-800'} px-5 py-3 rounded-2xl max-w-xs">
@@ -109,13 +100,14 @@ function renderMessages(messages) {
 function sendMessage() {
   const input = document.getElementById('messageInput');
   const mobileInput = document.getElementById('mobileInput');
-  const text = input.value.trim() || mobileInput.value.trim();
+  if (!input && !mobileInput) return;
+  const text = (input?.value || '').trim() || (mobileInput?.value || '').trim();
   if (!text || !currentCustomer) return;
 
   const newMsg = {
     text: text,
     sender: "seller",
-    time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   };
 
   currentCustomer.messages.push(newMsg);
@@ -125,13 +117,13 @@ function sendMessage() {
   renderMessages(currentCustomer.messages);
   renderConversations();
 
-  input.value = '';
+  if (input) input.value = '';
   if (mobileInput) mobileInput.value = '';
 }
 
 // Enter key to send
-document.getElementById('messageInput').addEventListener('keypress', e => { if(e.key === 'Enter') sendMessage(); });
-document.getElementById('mobileInput')?.addEventListener('keypress', e => { if(e.key === 'Enter') sendMessage(); });
+document.getElementById('messageInput')?.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+document.getElementById('mobileInput')?.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
 
 // Start
 renderConversations();

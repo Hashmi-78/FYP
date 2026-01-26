@@ -3,6 +3,12 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.urls import reverse
+from urllib.parse import urlencode
+from django.contrib.auth.models import User
+from django.utils.http import url_has_allowed_host_and_scheme
 from products.models import Product, Category
 from .models import SellerProfile, Order
 from products.forms import ProductForm
@@ -58,8 +64,12 @@ def dashboard_view(request):
     page_number = request.GET.get('page')
     products = paginator.get_page(page_number)
     
-    # Get seller's orders
-    orders = Order.objects.filter(seller=request.user).order_by('-created_at')[:10]
+    # Get seller's orders (seller isolation via OrderItem -> Product.seller)
+    orders = (
+        Order.objects.filter(items__product__seller=request.user)
+        .distinct()
+        .order_by('-created_at')[:10]
+    )
     
     # Calculate product statistics (using base query for accurate stats)
     all_products = Product.objects.filter(seller=request.user)
@@ -69,8 +79,8 @@ def dashboard_view(request):
     out_of_stock = all_products.filter(stock=0).count()
     
     # Calculate order statistics
-    total_orders = Order.objects.filter(seller=request.user).count()
-    pending_orders = Order.objects.filter(seller=request.user, status='pending').count()
+    total_orders = Order.objects.filter(items__product__seller=request.user).distinct().count()
+    pending_orders = Order.objects.filter(items__product__seller=request.user, status='pending').distinct().count()
     total_revenue = seller_profile.total_revenue
     
     # Get all categories for filter dropdown
@@ -101,19 +111,109 @@ def orders_view(request):
     """
     View all seller orders
     """
-    orders = Order.objects.filter(seller=request.user).order_by('-created_at')
+    orders = (
+        Order.objects.filter(items__product__seller=request.user)
+        .select_related('customer')
+        .prefetch_related('items', 'items__product')
+        .distinct()
+        .order_by('-created_at')
+    )
     
     # Filter by status if provided
     status = request.GET.get('status')
     if status:
         orders = orders.filter(status=status)
+
+    orders_data = []
+    for order in orders:
+        seller_items = [
+            item for item in order.items.all()
+            if item.product and item.product.seller_id == request.user.id
+        ]
+
+        seller_total = sum(float(item.subtotal) for item in seller_items)
+
+        orders_data.append({
+            'id': order.id,
+            'order_number': order.order_number,
+            'status': order.status,
+            'total': seller_total,
+            'created_at': order.created_at.strftime('%Y-%m-%d'),
+            'customer': {
+                'id': order.customer_id,
+                'name': order.shipping_full_name or order.customer.get_full_name() or order.customer.username,
+                'phone': order.shipping_phone or '',
+                'email': order.customer.email or '',
+                'address': ', '.join(
+                    part for part in [
+                        order.shipping_address_line_1,
+                        order.shipping_address_line_2,
+                        order.shipping_city,
+                        order.shipping_state,
+                        order.shipping_postal_code,
+                        order.shipping_country,
+                    ]
+                    if part
+                ),
+            },
+            'items': [
+                {
+                    'title': item.product_name,
+                    'qty': item.quantity,
+                    'subtotal': float(item.subtotal),
+                }
+                for item in seller_items
+            ],
+        })
     
     context = {
         'orders': orders,
         'status_choices': Order.STATUS_CHOICES,
+        'orders_data': orders_data,
     }
     
     return render(request, 'sellers/orders.html', context)
+
+
+@login_required
+@require_POST
+def order_status_update_view(request, order_id):
+    """Update a seller order's status with strict seller isolation."""
+    new_status = request.POST.get('status', '').strip()
+    allowed_statuses = {key for key, _label in Order.STATUS_CHOICES}
+    if new_status not in allowed_statuses:
+        return JsonResponse({'success': False, 'error': 'Invalid status.'}, status=400)
+
+    order = (
+        Order.objects.filter(id=order_id, items__product__seller=request.user)
+        .distinct()
+        .first()
+    )
+    if not order:
+        return JsonResponse({'success': False, 'error': 'Order not found.'}, status=404)
+
+    order.status = new_status
+    order.save(update_fields=['status', 'updated_at'])
+    return JsonResponse({'success': True, 'status': order.status})
+
+
+@login_required
+def order_conversation_redirect(request, order_id):
+    order = (
+        Order.objects.filter(
+            pk=order_id,
+        )
+        .filter(Q(seller=request.user) | Q(items__product__seller=request.user))
+        .select_related('customer')
+        .distinct()
+        .first()
+    )
+    if not order:
+        messages.error(request, 'Order not found.')
+        return redirect('sellers:orders')
+
+    query = urlencode({'user_id': order.customer_id, 'order_id': order.pk})
+    return redirect(f"{reverse('sellers:messages')}?{query}")
 
 
 @login_required
@@ -274,7 +374,65 @@ def messages_view(request):
     View seller messages
     """
     from .models import Message
-    from django.db.models import Max
+
+    return_url = request.GET.get('return_url')
+    back_url = None
+    if return_url and url_has_allowed_host_and_scheme(
+        url=return_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        back_url = return_url
+
+    if not back_url and request.GET.get('user_id'):
+        back_url = reverse('sellers:messages')
+
+    if not back_url:
+        ref = request.META.get('HTTP_REFERER')
+        if ref and url_has_allowed_host_and_scheme(
+            url=ref,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            messages_base = request.build_absolute_uri(reverse('sellers:messages'))
+            if ref.startswith(messages_base):
+                back_url = reverse('sellers:messages')
+            else:
+                back_url = ref
+
+    if not back_url:
+        back_url = reverse('sellers:dashboard')
+
+    order_id = request.GET.get('order_id')
+    selected_order_id = None
+    if order_id:
+        try:
+            selected_order_id = int(order_id)
+        except (TypeError, ValueError):
+            selected_order_id = None
+    
+    allowed_partner_ids = set(
+        Order.objects.filter(seller=request.user).values_list('customer_id', flat=True)
+    )
+
+    message_partner_ids = set(
+        Message.objects.filter(Q(sender=request.user) | Q(recipient=request.user))
+        .values_list('sender_id', 'recipient_id')
+        .distinct()
+    )
+    partner_ids = set()
+    for sender_id, recipient_id in message_partner_ids:
+        if sender_id and sender_id != request.user.id:
+            partner_ids.add(sender_id)
+        if recipient_id and recipient_id != request.user.id:
+            partner_ids.add(recipient_id)
+
+    if partner_ids:
+        customer_partner_ids = set(
+            User.objects.filter(id__in=partner_ids, seller_profile__isnull=True)
+            .values_list('id', flat=True)
+        )
+        allowed_partner_ids.update(customer_partner_ids)
     
     # Handle sending new message
     if request.method == 'POST':
@@ -283,21 +441,53 @@ def messages_view(request):
         
         if recipient_id and message_text:
             try:
+                if int(recipient_id) not in allowed_partner_ids:
+                    messages.error(request, 'You are not allowed to message this user.')
+                    return redirect('sellers:messages')
+
                 recipient = User.objects.get(id=recipient_id)
+                if hasattr(recipient, 'seller_profile'):
+                    messages.error(request, 'You can only message customers.')
+                    return redirect('sellers:messages')
+
+                linked_order = None
+                if selected_order_id:
+                    linked_order = (
+                        Order.objects.filter(
+                            pk=selected_order_id,
+                            seller=request.user,
+                            customer=recipient,
+                        )
+                        .first()
+                    )
+                if not linked_order:
+                    linked_order = (
+                        Order.objects.filter(seller=request.user, customer=recipient)
+                        .order_by('-created_at')
+                        .first()
+                    )
+
                 Message.objects.create(
                     sender=request.user,
                     recipient=recipient,
                     message=message_text,
-                    subject=f"Message from {request.user.username}"
+                    subject=f"Message from {request.user.username}",
+                    order=linked_order,
                 )
                 messages.success(request, 'Message sent successfully!')
-                return redirect(f"{request.path}?user_id={recipient_id}")
+                query = {'user_id': recipient_id}
+                if selected_order_id:
+                    query['order_id'] = selected_order_id
+                if back_url:
+                    query['return_url'] = back_url
+                return redirect(f"{request.path}?{urlencode(query)}")
             except Exception as e:
                 messages.error(request, f'Error sending message: {str(e)}')
     
     # Get all messages involving the user
     all_messages = Message.objects.filter(
-        Q(sender=request.user) | Q(recipient=request.user)
+        Q(sender=request.user, recipient_id__in=allowed_partner_ids)
+        | Q(recipient=request.user, sender_id__in=allowed_partner_ids)
     ).select_related('sender', 'recipient')
     
     # Group by conversation partner
@@ -333,9 +523,26 @@ def messages_view(request):
     if selected_user_id:
         try:
             selected_user_id = int(selected_user_id)
+            if selected_user_id not in allowed_partner_ids:
+                messages.error(request, 'You are not allowed to view this conversation.')
+                return redirect('sellers:messages')
+
             chat_messages = all_messages.filter(
                 Q(sender__id=selected_user_id) | Q(recipient__id=selected_user_id)
-            ).order_by('created_at')
+            )
+            if selected_order_id:
+                order_ok = Order.objects.filter(
+                    pk=selected_order_id,
+                    seller=request.user,
+                    customer_id=selected_user_id,
+                ).exists()
+                if not order_ok:
+                    messages.error(request, 'You are not allowed to view this order conversation.')
+                    return redirect('sellers:messages')
+
+                chat_messages = chat_messages.filter(order_id=selected_order_id)
+
+            chat_messages = chat_messages.order_by('created_at')
             
             # Mark as read
             chat_messages.filter(recipient=request.user, is_read=False).update(is_read=True)
@@ -352,6 +559,7 @@ def messages_view(request):
         'selected_conversation': selected_conversation,
         'chat_messages': chat_messages,
         'total_unread': total_unread,
+        'back_url': back_url,
     }
     
     return render(request, 'sellers/messages.html', context)
@@ -401,11 +609,25 @@ def delivery_view(request):
     total_completed = orders.filter(status__in=['delivered', 'cancelled', 'refunded']).count()
     if total_completed > 0:
         delivery_stats['delivery_rate'] = (delivery_stats['total_deliveries'] / total_completed) * 100
+
+    cities = {
+        'Lahore': {'lat': 31.5204, 'lng': 74.3587},
+        'Karachi': {'lat': 24.8607, 'lng': 67.0011},
+        'Islamabad': {'lat': 33.6844, 'lng': 73.0479},
+        'Faisalabad': {'lat': 31.4504, 'lng': 73.1350},
+        'Multan': {'lat': 30.1575, 'lng': 71.5249},
+        'Sahiwal': {'lat': 30.6680, 'lng': 73.1113},
+        'Sialkot': {'lat': 32.4945, 'lng': 74.5229},
+        'Gujranwala': {'lat': 32.1877, 'lng': 74.1945},
+        'Rawalpindi': {'lat': 33.5651, 'lng': 73.0169},
+        'Peshawar': {'lat': 34.0151, 'lng': 71.5249},
+    }
     
     context = {
         'seller_profile': seller_profile,
         'delivery_stats': delivery_stats,
         'recent_orders': orders.filter(status='shipped')[:10],
+        'delivery_cities': cities,
     }
     
     return render(request, 'sellers/delivery.html', context)
@@ -419,42 +641,60 @@ def sales_graph_view(request):
     from django.db.models import Sum, Count, Avg
     from django.db.models.functions import TruncDate, TruncMonth
     from datetime import datetime, timedelta
+    from customers.models import OrderItem
     
     # Get date range from request or default to last 30 days
     days = int(request.GET.get('days', 30))
     start_date = datetime.now() - timedelta(days=days)
     
-    orders = Order.objects.filter(seller=request.user, created_at__gte=start_date)
-    
-    # Daily sales data
-    daily_sales = orders.annotate(date=TruncDate('created_at')).values('date').annotate(
-        total_sales=Sum('total'),
-        order_count=Count('id')
-    ).order_by('date')
-    
-    # Overall statistics
-    stats = {
-        'total_revenue': orders.aggregate(total=Sum('total'))['total'] or 0,
-        'total_orders': orders.count(),
-        'average_order_value': orders.aggregate(avg=Avg('total'))['avg'] or 0,
-        'completed_orders': orders.filter(status='delivered').count(),
-        'pending_orders': orders.filter(status='pending').count(),
-    }
-    
-    # Top selling products
-    from .models import OrderItem
-    top_products = OrderItem.objects.filter(
-        order__seller=request.user,
+    seller_items = OrderItem.objects.filter(
+        product__seller=request.user,
         order__created_at__gte=start_date
-    ).values('product__name').annotate(
+    )
+
+    daily_sales = (
+        seller_items.annotate(date=TruncDate('order__created_at'))
+        .values('date')
+        .annotate(total_sales=Sum('subtotal'))
+        .order_by('date')
+    )
+
+    monthly_sales = (
+        seller_items.annotate(month=TruncMonth('order__created_at'))
+        .values('month')
+        .annotate(total_sales=Sum('subtotal'))
+        .order_by('month')
+    )
+
+    total_revenue = seller_items.aggregate(total=Sum('subtotal'))['total'] or 0
+    total_orders = seller_items.values('order_id').distinct().count()
+    average_order_value = (total_revenue / total_orders) if total_orders else 0
+    units_sold = seller_items.aggregate(total=Sum('quantity'))['total'] or 0
+
+    stats = {
+        'total_revenue': total_revenue,
+        'total_orders': total_orders,
+        'average_order_value': average_order_value,
+        'units_sold': units_sold,
+    }
+
+    top_products = seller_items.values('product__name').annotate(
         quantity_sold=Sum('quantity'),
         revenue=Sum('subtotal')
     ).order_by('-quantity_sold')[:5]
+
+    low_stock_products = Product.objects.filter(
+        seller=request.user,
+        stock__gt=0,
+        stock__lte=10,
+    ).order_by('stock')[:5]
     
     context = {
         'daily_sales': list(daily_sales),
+        'monthly_sales': list(monthly_sales),
         'stats': stats,
-        'top_products': top_products,
+        'top_products': list(top_products),
+        'low_stock_products': low_stock_products,
         'days': days,
     }
     
@@ -495,3 +735,5 @@ def payment_view(request):
     }
     
     return render(request, 'sellers/payment.html', context)
+
+

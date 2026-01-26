@@ -18,7 +18,12 @@
     }
 
     .kpi-card {
-      @apply bg-white rounded-lg shadow p-4 text-center border border-blue-100;
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      padding: 1rem;
+      text-align: center;
+      border: 1px solid #dbeafe;
     }
   </style>
 </head>
@@ -29,7 +34,13 @@
 
     <!-- Header -->
     <div class="bg-white rounded-lg shadow p-4 mb-5 flex justify-between items-center">
-      <h1 class="text-xl font-bold text-blue-900">Sales Analytics Dashboard</h1>
+      <div class="flex items-center gap-4">
+        <a href="{{ request.META.HTTP_REFERER|default:'/sellers/dashboard/' }}"
+          class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2 rounded-lg font-medium">
+          Back
+        </a>
+        <h1 class="text-xl font-bold text-blue-900">Sales Analytics Dashboard</h1>
+      </div>
       <select id="timeFilter" class="px-4 py-2 border border-blue-900 rounded-lg text-blue-900 font-medium text-sm">
         <option>Last 7 Days</option>
         <option>Last 30 Days</option>
@@ -42,19 +53,19 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
       <div class="kpi-card">
         <p class="text-gray-600 text-xs">Total Revenue</p>
-        <p class="text-2xl font-bold text-blue-900">₨1,248,500</p>
+        <p class="text-2xl font-bold text-blue-900">₨{{ stats.total_revenue|floatformat:0 }}</p>
       </div>
       <div class="kpi-card">
         <p class="text-gray-600 text-xs">Orders</p>
-        <p class="text-2xl font-bold text-green-600">342</p>
+        <p class="text-2xl font-bold text-green-600">{{ stats.total_orders }}</p>
       </div>
       <div class="kpi-card">
         <p class="text-gray-600 text-xs">Units Sold</p>
-        <p class="text-2xl font-bold text-purple-600">1,892</p>
+        <p class="text-2xl font-bold text-purple-600">{{ stats.units_sold }}</p>
       </div>
       <div class="kpi-card">
         <p class="text-gray-600 text-xs">Avg Order Value</p>
-        <p class="text-2xl font-bold text-orange-600">₨3,650</p>
+        <p class="text-2xl font-bold text-orange-600">₨{{ stats.average_order_value|floatformat:0 }}</p>
       </div>
     </div>
 
@@ -69,6 +80,10 @@
         <canvas id="monthlyChart"></canvas>
       </div>
     </div>
+
+    {{ daily_sales|json_script:"daily-sales-data" }}
+    {{ monthly_sales|json_script:"monthly-sales-data" }}
+    {{ top_products|json_script:"top-products-data" }}
 
     <!-- Bottom Row: Top Products + Low Stock -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -86,18 +101,16 @@
           <i class="fas fa-exclamation-triangle"></i> Low Stock Alerts
         </h3>
         <div id="lowStock" class="space-y-2 text-sm">
+          {% for p in low_stock_products %}
           <div class="bg-red-50 border border-red-300 rounded p-3">
-            <p class="font-bold">iPhone 15 Pro</p>
-            <p class="text-red-700">Only 3 units left!</p>
+            <p class="font-bold">{{ p.name }}</p>
+            <p class="text-red-700">Only {{ p.stock }} units left!</p>
           </div>
-          <div class="bg-orange-50 border border-orange-300 rounded p-3">
-            <p class="font-bold">AirPods Pro</p>
-            <p class="text-orange-700">8 units remaining</p>
+          {% empty %}
+          <div class="bg-gray-50 border border-gray-200 rounded p-3">
+            <p class="font-bold">No low stock products</p>
           </div>
-          <div class="bg-yellow-50 border border-yellow-300 rounded p-3">
-            <p class="font-bold">MacBook Charger</p>
-            <p class="text-yellow-700">12 units left</p>
-          </div>
+          {% endfor %}
         </div>
       </div>
     </div>
