@@ -42,6 +42,7 @@ urlpatterns = [
     
     # Checkout
     path('checkout/', views.checkout_view, name='checkout'),
+    path('checkout/negotiation/<int:order_id>/', views.checkout_with_negotiation, name='checkout_with_negotiation'),
     
     # AI Features
     path('ai-search/', views.ai_search_view, name='ai_search'),

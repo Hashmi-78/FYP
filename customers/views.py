@@ -8,7 +8,8 @@ from django.views.decorators.http import require_POST
 from django.urls import reverse
 from urllib.parse import urlencode
 import json
-from .models import CustomerProfile, ShippingAddress, Cart, CartItem, Wishlist, Order, OrderItem
+from .models import CustomerProfile, ShippingAddress, Cart, CartItem, Wishlist, Order, OrderItem, NegotiatedOrder
+from products.models import ProductNegotiation, ProductNegotiationOffer
 from products.models import Product, Category
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -472,6 +473,128 @@ def checkout_view(request):
             return redirect('customers:checkout')
         
     return render(request, 'customers/checkout.html', {'cart': cart, 'addresses': addresses})
+
+@login_required
+def checkout_with_negotiation(request, order_id):
+    negotiated_order = get_object_or_404(NegotiatedOrder.objects.select_related('product', 'product__seller'), pk=order_id)
+
+    if negotiated_order.buyer != request.user:
+        messages.error(request, 'You do not have access to this negotiated checkout.')
+        return redirect('customers:home')
+
+    if negotiated_order.status != NegotiatedOrder.STATUS_PENDING:
+        messages.error(request, 'This negotiated order is no longer available.')
+        return redirect('products:negotiate', slug=negotiated_order.product.slug)
+
+    if negotiated_order.expires_at and negotiated_order.expires_at <= timezone.now():
+        negotiated_order.status = NegotiatedOrder.STATUS_CANCELLED
+        negotiated_order.save(update_fields=['status'])
+        messages.error(request, 'This negotiated price has expired. Please negotiate again.')
+        return redirect('products:negotiate', slug=negotiated_order.product.slug)
+
+    product = negotiated_order.product
+    addresses = ShippingAddress.objects.filter(customer=request.user)
+
+    if request.method == 'POST':
+        payment_method = request.POST.get('payment_method', 'cod')
+
+        saved_address_id = request.POST.get('saved_address')
+        shipping_address = None
+
+        if saved_address_id:
+            shipping_address = get_object_or_404(ShippingAddress, id=saved_address_id, customer=request.user)
+        else:
+            full_name = request.POST.get('full_name')
+            phone = request.POST.get('phone')
+            address_line_1 = request.POST.get('address_line_1')
+            city = request.POST.get('city')
+            state = request.POST.get('state')
+            postal_code = request.POST.get('postal_code')
+            country = request.POST.get('country', 'Pakistan')
+            save_info = request.POST.get('save_address') == 'on'
+
+            if not all([full_name, phone, address_line_1, city]):
+                messages.error(request, 'Please fill in all required address fields.')
+                return redirect('checkout_with_negotiation', order_id=negotiated_order.id)
+
+            shipping_address = ShippingAddress(
+                customer=request.user,
+                full_name=full_name,
+                phone=phone,
+                address_line_1=address_line_1,
+                address_line_2=request.POST.get('address_line_2', ''),
+                city=city,
+                state=state,
+                postal_code=postal_code,
+                country=country,
+                is_default=False,
+            )
+
+            if save_info:
+                shipping_address.save()
+            else:
+                shipping_address.save()
+
+        try:
+            with transaction.atomic():
+                refreshed = NegotiatedOrder.objects.select_for_update().get(pk=negotiated_order.pk)
+                if refreshed.status != NegotiatedOrder.STATUS_PENDING:
+                    messages.error(request, 'This negotiated order is no longer available.')
+                    return redirect('products:negotiate', slug=product.slug)
+
+                if refreshed.expires_at and refreshed.expires_at <= timezone.now():
+                    refreshed.status = NegotiatedOrder.STATUS_CANCELLED
+                    refreshed.save(update_fields=['status'])
+                    messages.error(request, 'This negotiated price has expired. Please negotiate again.')
+                    return redirect('products:negotiate', slug=product.slug)
+
+                order_subtotal = refreshed.negotiated_price
+                order_tax = 0
+                order_total = order_subtotal + order_tax
+
+                order = Order.objects.create(
+                    customer=request.user,
+                    seller=product.seller,
+                    status='pending',
+                    payment_method=payment_method,
+                    shipping_address=shipping_address,
+                    shipping_full_name=shipping_address.full_name,
+                    shipping_phone=shipping_address.phone,
+                    shipping_address_line_1=shipping_address.address_line_1,
+                    shipping_city=shipping_address.city,
+                    shipping_state=shipping_address.state,
+                    shipping_postal_code=shipping_address.postal_code,
+                    shipping_country=shipping_address.country,
+                    subtotal=order_subtotal,
+                    total=order_total,
+                )
+
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    product_name=product.name,
+                    product_sku=product.sku,
+                    product_image=product.main_image,
+                    price=refreshed.negotiated_price,
+                    quantity=1,
+                )
+
+                refreshed.status = NegotiatedOrder.STATUS_COMPLETED
+                refreshed.save(update_fields=['status'])
+
+                messages.success(request, 'Order placed successfully!')
+                return redirect('customers:orders')
+
+        except Exception as e:
+            messages.error(request, f'Error processing negotiated order: {str(e)}')
+            return redirect('checkout_with_negotiation', order_id=negotiated_order.id)
+
+    context = {
+        'negotiated_order': negotiated_order,
+        'product': product,
+        'addresses': addresses,
+    }
+    return render(request, 'customers/checkout_negotiated.html', context)
 
 @login_required
 def messages_view(request):

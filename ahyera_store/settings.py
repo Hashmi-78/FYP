@@ -143,7 +143,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 LOGIN_URL = '/auth/login/'
 LOGIN_REDIRECT_URL = '/'
 
+MAX_NEGOTIATION_DISCOUNT = 0.20
+MAX_NEGOTIATION_ATTEMPTS = 5
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+# AI Negotiation (Groq/Llama)
+GROQ_API_KEY = config('GROQ_API_KEY', default='')

@@ -98,6 +98,8 @@
           <div>
             <label class="block text-blue-900 font-semibold mb-2">Price (₨) *</label>
             {{ form.price }}
+            <p class="mt-2 text-sm text-gray-600">The AI negotiation system may offer up to 20% discount from your
+              listed price. Please set your base price accordingly.</p>
             {% if form.price.help_text %}
             <p class="mt-1 text-sm text-gray-500">{{ form.price.help_text }}</p>
             {% endif %}

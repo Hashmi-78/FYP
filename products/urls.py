@@ -14,5 +14,6 @@ urlpatterns = [
     path('<int:pk>/toggle/', views.product_toggle_availability_view, name='toggle_availability'),
 
     # Product Detail (view single product)
+    path('<slug:slug>/negotiate/', views.negotiate_view, name='negotiate'),
     path('<slug:slug>/', views.product_detail_view, name='detail'),
 ]

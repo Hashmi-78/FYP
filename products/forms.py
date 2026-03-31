@@ -4,6 +4,21 @@ from django.utils.text import slugify
 
 from .models import Category, Product
 
+
+class NegotiationOfferForm(forms.Form):
+    offer = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+        widget=forms.NumberInput(
+            attrs={
+                'class': 'w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none',
+                'placeholder': 'Enter your offer',
+                'step': '0.01',
+            }
+        ),
+    )
+
 class ProductForm(forms.ModelForm):
     new_category = forms.CharField(
         required=False,

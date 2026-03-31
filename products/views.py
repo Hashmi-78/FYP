@@ -3,8 +3,15 @@ from django.db.models import Q, Count  # <--- Added Count here
 from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.conf import settings
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from customers.models import NegotiatedOrder
 from .models import Product, Category
-from .forms import ProductForm
+from .forms import ProductForm, NegotiationOfferForm
+from .models import ProductNegotiation, ProductNegotiationOffer
+from services.llama_service import negotiate_price
+from products.models import ProductNegotiation, ProductNegotiationOffer
+from django.utils import timezone
 
 # Public View: List all products
 def product_list_view(request):
@@ -107,6 +114,175 @@ def product_detail_view(request, slug):
     }
     
     return render(request, 'products/detail.html', context)
+
+
+@login_required
+def negotiate_view(request, slug):
+    product = get_object_or_404(
+        Product.objects.select_related('category', 'seller'),
+        slug=slug,
+        is_available=True,
+    )
+
+    if request.user == product.seller:
+        messages.error(request, 'You cannot negotiate on your own product.')
+        return redirect('products:detail', slug=product.slug)
+
+    negotiation, _created = ProductNegotiation.objects.get_or_create(
+        product=product,
+        buyer=request.user,
+        defaults={'status': ProductNegotiation.STATUS_OPEN},
+    )
+
+    offers_qs = negotiation.offers.all()
+    attempts = offers_qs.count()
+
+    try:
+        min_price = (product.price * (Decimal('1') - Decimal(str(settings.MAX_NEGOTIATION_DISCOUNT))))
+    except Exception:
+        min_price = product.price
+
+    min_price = min_price.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    listed_price = Decimal(str(product.price)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    form = NegotiationOfferForm()
+
+    if request.method == 'POST':
+        form = NegotiationOfferForm(request.POST)
+        if form.is_valid():
+            if negotiation.status != ProductNegotiation.STATUS_OPEN:
+                return redirect('products:negotiate', slug=product.slug)
+
+            attempts = negotiation.offers.count()
+            if attempts >= int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 5)):
+                return redirect('products:negotiate', slug=product.slug)
+
+            offer = form.cleaned_data['offer']
+            offer = Decimal(str(offer)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            decision = None
+            counter_price = None
+            raw_ai_output = ''
+
+            hard_reject_threshold = (min_price * Decimal('0.7')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            if offer >= listed_price:
+                decision = ProductNegotiationOffer.DECISION_ACCEPT
+            elif offer < hard_reject_threshold:
+                decision = ProductNegotiationOffer.DECISION_REJECT
+            elif offer < min_price:
+                decision = ProductNegotiationOffer.DECISION_COUNTER
+                counter_price = min_price
+            else:
+                result = negotiate_price(
+                    product_price=listed_price,
+                    min_price=min_price,
+                    offer=offer,
+                )
+                decision = result.get('decision')
+                counter_price = result.get('counter_price')
+                raw_ai_output = result.get('raw_output') or ''
+
+            if decision == ProductNegotiationOffer.DECISION_ACCEPT:
+                if offer < min_price:
+                    decision = ProductNegotiationOffer.DECISION_COUNTER
+                    counter_price = min_price
+            elif decision == ProductNegotiationOffer.DECISION_COUNTER:
+                try:
+                    counter_price = Decimal(str(counter_price)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                except (InvalidOperation, TypeError):
+                    counter_price = ((offer + listed_price) / 2).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+                if counter_price < min_price:
+                    counter_price = min_price
+                if counter_price > listed_price:
+                    counter_price = listed_price
+            elif decision != ProductNegotiationOffer.DECISION_REJECT:
+                decision = ProductNegotiationOffer.DECISION_COUNTER
+                counter_price = ((offer + listed_price) / 2).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                if counter_price < min_price:
+                    counter_price = min_price
+                if counter_price > listed_price:
+                    counter_price = listed_price
+
+            ProductNegotiationOffer.objects.create(
+                negotiation=negotiation,
+                offer_price=offer,
+                decision=decision,
+                counter_price=counter_price,
+                raw_ai_output=raw_ai_output,
+            )
+
+            if decision == ProductNegotiationOffer.DECISION_ACCEPT:
+
+                pending = NegotiatedOrder.objects.filter(
+                    buyer=request.user,
+                    product=product,
+                    status=NegotiatedOrder.STATUS_PENDING,
+                ).order_by('-created_at').first()
+
+                if pending and pending.expires_at and pending.expires_at <= timezone.now():
+                    pending.status = NegotiatedOrder.STATUS_CANCELLED
+                    pending.save(update_fields=['status'])
+                    pending = None
+
+                if pending and pending.negotiated_price != offer:
+                    pending.status = NegotiatedOrder.STATUS_CANCELLED
+                    pending.save(update_fields=['status'])
+                    pending = None
+
+                if not pending:
+                    pending = NegotiatedOrder.objects.create(
+                        buyer=request.user,
+                        product=product,
+                        negotiated_price=offer,
+                        status=NegotiatedOrder.STATUS_PENDING,
+                    )
+
+                return redirect('checkout_with_negotiation', order_id=pending.id)
+                negotiation.status = ProductNegotiation.STATUS_ACCEPTED
+                negotiation.save(update_fields=['status', 'updated_at'])
+            elif decision == ProductNegotiationOffer.DECISION_REJECT:
+                negotiation.status = ProductNegotiation.STATUS_REJECTED
+                negotiation.save(update_fields=['status', 'updated_at'])
+            else:
+                negotiation.save(update_fields=['updated_at'])
+
+            return redirect('products:negotiate', slug=product.slug)
+
+        return redirect('products:negotiate', slug=product.slug)
+
+    offers = offers_qs
+    latest_offer = offers.last()
+
+    negotiated_order = None
+    if negotiation.status == ProductNegotiation.STATUS_ACCEPTED:
+        negotiated_order = NegotiatedOrder.objects.filter(
+            buyer=request.user,
+            product=product,
+            status=NegotiatedOrder.STATUS_PENDING,
+        ).order_by('-created_at').first()
+
+    form_disabled = False
+    if negotiation.status != ProductNegotiation.STATUS_OPEN:
+        form_disabled = True
+    if attempts >= int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 5)):
+        form_disabled = True
+
+    context = {
+        'product': product,
+        'negotiation': negotiation,
+        'min_price': min_price,
+        'listed_price': listed_price,
+        'attempts': attempts,
+        'max_attempts': int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 5)),
+        'offers': offers,
+        'latest_offer': latest_offer,
+        'negotiated_order': negotiated_order,
+        'form': form,
+        'form_disabled': form_disabled,
+    }
+    return render(request, 'products/negotiate.html', context)
 
 
 @login_required

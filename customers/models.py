@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from products.models import Product
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+from datetime import timedelta
 
 
 class CustomerProfile(models.Model):
@@ -288,3 +290,27 @@ class Notification(models.Model):
 
     def __str__(self):
         return f'Notification for {self.user.username}'
+
+
+def _negotiated_order_default_expires_at():
+    return timezone.now() + timedelta(hours=24)
+
+class NegotiatedOrder(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_COMPLETED = 'completed'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
+    buyer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='negotiated_orders')
+    product = models.ForeignKey('products.Product', on_delete=models.CASCADE)
+    negotiated_price = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    expires_at = models.DateTimeField(default=_negotiated_order_default_expires_at)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.buyer} - {self.product} - {self.negotiated_price}"

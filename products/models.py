@@ -121,3 +121,51 @@ class ProductReview(models.Model):
     
     def __str__(self):
         return f'{self.user.username} - {self.product.name} ({self.rating}★)'
+
+
+class ProductNegotiation(models.Model):
+    STATUS_OPEN = 'open'
+    STATUS_ACCEPTED = 'accepted'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = [
+        (STATUS_OPEN, 'Open'),
+        (STATUS_ACCEPTED, 'Accepted'),
+        (STATUS_REJECTED, 'Rejected'),
+    ]
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='negotiations')
+    buyer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='product_negotiations')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        unique_together = ('product', 'buyer')
+
+    def __str__(self):
+        return f'Negotiation({self.product_id}, {self.buyer_id})'
+
+
+class ProductNegotiationOffer(models.Model):
+    DECISION_ACCEPT = 'accept'
+    DECISION_REJECT = 'reject'
+    DECISION_COUNTER = 'counter'
+    DECISION_CHOICES = [
+        (DECISION_ACCEPT, 'Accept'),
+        (DECISION_REJECT, 'Reject'),
+        (DECISION_COUNTER, 'Counter'),
+    ]
+
+    negotiation = models.ForeignKey(ProductNegotiation, on_delete=models.CASCADE, related_name='offers')
+    offer_price = models.DecimalField(max_digits=10, decimal_places=2)
+    decision = models.CharField(max_length=20, choices=DECISION_CHOICES)
+    counter_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    raw_ai_output = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'Offer({self.negotiation_id}): {self.offer_price} -> {self.decision}'
