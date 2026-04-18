@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.urls import reverse
 from urllib.parse import urlencode
+import logging
 import json
 from .models import CustomerProfile, ShippingAddress, Cart, CartItem, Wishlist, Order, OrderItem, NegotiatedOrder
 from products.models import ProductNegotiation, ProductNegotiationOffer
@@ -15,14 +16,26 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from sellers.models import Message
 
+logger = logging.getLogger(__name__)
+
 def home(request):
     """
-    Customer homepage with all products
+    Customer homepage with all products and personalized recommendations
     """
+    from services.recommendation_service import get_recommendations_for_user, get_recommendations_for_guest
+
     # Main product list
     products = Product.objects.filter(is_available=True).order_by('-created_at')
     
-    # AI Recommended products
+    # Personalized recommendations
+    if request.user.is_authenticated:
+        recommended_products = get_recommendations_for_user(request.user, limit=6)
+        recommendation_label = 'Recommended For You'
+    else:
+        recommended_products = get_recommendations_for_guest(limit=6)
+        recommendation_label = 'Trending Products'
+
+    # Keep existing ai_products for backward compatibility (used by carousel)
     ai_products = Product.objects.filter(is_available=True, ai_recommended=True).order_by('-created_at')[:6]
     
     # Categories for sidebar with product count (Using Q object)
@@ -40,6 +53,8 @@ def home(request):
     context = {
         'products': products,
         'ai_products': ai_products,
+        'recommended_products': recommended_products,
+        'recommendation_label': recommendation_label,
         'categories': categories,
         'unread_messages_count': unread_messages_count,
     }
@@ -785,11 +800,43 @@ def ai_search_view(request):
     )
 
 def ai_image_search(request):
-    """
-    Handle AI image search
-    """
-    # Placeholder for AI logic
-    return redirect('customers:ai_search')
+    if request.method != 'POST':
+        return redirect('customers:ai_search')
+
+    uploaded_file = request.FILES.get('search_image')
+    if not uploaded_file:
+        messages.error(request, 'Please upload an image to search.')
+        return redirect('customers:ai_search')
+
+    try:
+        from PIL import Image as PILImage
+        from services.visual_search_service import find_similar_products
+
+        image = PILImage.open(uploaded_file).convert('RGB')
+        matched_products, search_description = find_similar_products(image, top_k=6)
+
+        show_google_fallback = len(matched_products) < 3
+
+        suggestions = list(
+            Product.objects.filter(is_available=True)
+            .order_by('-created_at')
+            .values_list('name', flat=True)[:50]
+        )
+
+        context = {
+            'search_results': matched_products,
+            'show_google_fallback': show_google_fallback,
+            'is_visual_search': True,
+            'visual_description': search_description,
+            'suggestions': suggestions,
+            'visual_result_count': len(matched_products),
+        }
+        return render(request, 'customers/ai_search.html', context)
+
+    except Exception as e:
+        logger.exception('Visual search failed: %s', e)
+        messages.error(request, 'Could not process the image. Please try again.')
+        return redirect('customers:ai_search')
 
 def ai_chatbot_view(request):
     """

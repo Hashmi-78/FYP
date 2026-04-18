@@ -304,6 +304,46 @@
             </div>
         </div>
         {% endif %}
+
+        {% if recommended_products %}
+        <div class="mb-10">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">{{ recommendation_label }}</h2>
+            <p class="text-sm text-gray-500 mb-6">
+                {% if user.is_authenticated %}
+                Based on your order history and wishlist
+                {% else %}
+                Popular products you may like
+                {% endif %}
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {% for rec in recommended_products %}
+                <a href="{% url 'products:detail' rec.slug %}"
+                    class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition group">
+                    <div class="h-48 bg-gray-200">
+                        {% if rec.main_image %}
+                        <img src="{{ rec.main_image.url }}" alt="{{ rec.name }}"
+                            class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                        {% else %}
+                        <div class="w-full h-full flex items-center justify-center">
+                            <i class="fas fa-image text-4xl text-gray-400"></i>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="p-4">
+                        <p class="text-xs text-gray-500 mb-1">{{ rec.category.name }}</p>
+                        <h3 class="font-bold text-gray-800 mb-2 line-clamp-2">{{ rec.name }}</h3>
+                        {% if rec.discount_percentage > 0 %}
+                        <p class="text-pink-600 font-bold text-lg">PKR {{ rec.get_discount_price|floatformat:0 }}</p>
+                        {% else %}
+                        <p class="text-blue-900 font-bold text-lg">PKR {{ rec.price|floatformat:0 }}</p>
+                        {% endif %}
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </section>
 
@@ -312,6 +352,7 @@
     <div class="max-w-7xl mx-auto px-4 text-center">
         <h1 class="text-4xl font-heading font-bold mb-3">Ahyera Store</h1>
         <p class="text-gray-400">Pakistan's Most Loved Luxury Fashion Brand</p>
+        <p class="text-gray-500 text-sm mt-8"> 2025 Ahyera Store. All rights reserved.</p>
         <p class="text-gray-500 text-sm mt-8">© 2025 Ahyera Store. All rights reserved.</p>
     </div>
 </footer>

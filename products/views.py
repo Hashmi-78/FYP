@@ -90,26 +90,41 @@ def product_list_view(request):
 
 def product_detail_view(request, slug):
     """
-    Display detailed view of a single product
+    Display detailed view of a single product with recommendations
     """
+    from services.recommendation_service import get_recommendations_for_user, get_recommendations_for_guest
+
     product = get_object_or_404(
         Product.objects.select_related('category', 'seller'),
         slug=slug,
         is_available=True
     )
     
-    # Get related products from same category
+    # Related products from same category (existing logic — keep this)
     related_products = Product.objects.filter(
         category=product.category,
         is_available=True
     ).exclude(id=product.id)[:4]
+
+    # Personalized recommendations
+    if request.user.is_authenticated:
+        recommended_products = get_recommendations_for_user(request.user, limit=4)
+        recommendation_label = 'Recommended For You'
+    else:
+        recommended_products = get_recommendations_for_guest(limit=4)
+        recommendation_label = 'You May Also Like'
+
+    # Exclude the current product from recommendations
+    recommended_products = [p for p in recommended_products if p.id != product.id]
     
-    # Get product reviews
+    # Reviews
     reviews = product.reviews.all().select_related('user')[:10]
     
     context = {
         'product': product,
         'related_products': related_products,
+        'recommended_products': recommended_products,
+        'recommendation_label': recommendation_label,
         'reviews': reviews,
     }
     

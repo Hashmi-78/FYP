@@ -1,5 +1,6 @@
 from django import forms
 from .models import SellerProfile
+import re
 
 
 class SellerProfileForm(forms.ModelForm):
@@ -58,3 +59,9 @@ class SellerProfileForm(forms.ModelForm):
             'address': 'Business Address',
             'city': 'City',
         }
+
+    def clean_phone(self):
+        phone = self.cleaned_data.get('phone')
+        if phone and not re.match(r'^(\+92|0)\d{10}$', phone.replace(' ', '').replace('-', '')):
+            raise forms.ValidationError('Enter a valid Pakistani number e.g. 03001234567')
+        return phone

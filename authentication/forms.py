@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
+import re
 
 
 class UserRegistrationForm(UserCreationForm):
@@ -40,6 +41,31 @@ class UserRegistrationForm(UserCreationForm):
                 self.add_error('city', 'City is required for sellers.')
                 
         return cleaned_data
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w{2,4}$', email):
+            raise forms.ValidationError('Enter a valid email address e.g. name@example.com')
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('An account with this email already exists.')
+        return email
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if not username.isalpha():
+            raise forms.ValidationError('Username can only contain letters, no numbers or special characters.')
+        return username
+
+    def clean_password2(self):
+        password = self.cleaned_data.get('password2')
+        if password:
+            if len(password) < 8:
+                raise forms.ValidationError('Password must be at least 8 characters.')
+            if not any(c.isdigit() for c in password):
+                raise forms.ValidationError('Password must contain at least one number.')
+            if not any(c.isupper() for c in password):
+                raise forms.ValidationError('Password must contain at least one uppercase letter.')
+        return password
 
 
 class UserLoginForm(AuthenticationForm):
