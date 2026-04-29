@@ -144,7 +144,7 @@ LOGIN_URL = '/auth/login/'
 LOGIN_REDIRECT_URL = '/'
 
 MAX_NEGOTIATION_DISCOUNT = 0.20
-MAX_NEGOTIATION_ATTEMPTS = 5
+MAX_NEGOTIATION_ATTEMPTS = 3
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -152,3 +152,13 @@ MAX_NEGOTIATION_ATTEMPTS = 5
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # AI Negotiation (Groq/Llama)
 GROQ_API_KEY = config('GROQ_API_KEY', default='')
+
+# ========== EMAIL CONFIGURATION ==========
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+PASSWORD_RESET_TIMEOUT = 259200  # 3 days in seconds

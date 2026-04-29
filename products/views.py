@@ -169,7 +169,7 @@ def negotiate_view(request, slug):
                 return redirect('products:negotiate', slug=product.slug)
 
             attempts = negotiation.offers.count()
-            if attempts >= int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 5)):
+            if attempts >= int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 3)):
                 return redirect('products:negotiate', slug=product.slug)
 
             offer = form.cleaned_data['offer']
@@ -229,6 +229,8 @@ def negotiate_view(request, slug):
             )
 
             if decision == ProductNegotiationOffer.DECISION_ACCEPT:
+                negotiation.status = ProductNegotiation.STATUS_ACCEPTED
+                negotiation.save(update_fields=['status', 'updated_at'])
 
                 pending = NegotiatedOrder.objects.filter(
                     buyer=request.user,
@@ -255,11 +257,17 @@ def negotiate_view(request, slug):
                     )
 
                 return redirect('checkout_with_negotiation', order_id=pending.id)
-                negotiation.status = ProductNegotiation.STATUS_ACCEPTED
-                negotiation.save(update_fields=['status', 'updated_at'])
+
             elif decision == ProductNegotiationOffer.DECISION_REJECT:
-                negotiation.status = ProductNegotiation.STATUS_REJECTED
-                negotiation.save(update_fields=['status', 'updated_at'])
+                # Only permanently close the negotiation if all attempts are exhausted
+                attempts_after = negotiation.offers.count()
+                max_attempts = int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 3))
+
+                if attempts_after >= max_attempts:
+                    negotiation.status = ProductNegotiation.STATUS_REJECTED
+                    negotiation.save(update_fields=['status', 'updated_at'])
+                else:
+                    negotiation.save(update_fields=['updated_at'])
             else:
                 negotiation.save(update_fields=['updated_at'])
 
@@ -281,7 +289,7 @@ def negotiate_view(request, slug):
     form_disabled = False
     if negotiation.status != ProductNegotiation.STATUS_OPEN:
         form_disabled = True
-    if attempts >= int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 5)):
+    if attempts >= int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 3)):
         form_disabled = True
 
     context = {
@@ -290,7 +298,7 @@ def negotiate_view(request, slug):
         'min_price': min_price,
         'listed_price': listed_price,
         'attempts': attempts,
-        'max_attempts': int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 5)),
+        'max_attempts': int(getattr(settings, 'MAX_NEGOTIATION_ATTEMPTS', 3)),
         'offers': offers,
         'latest_offer': latest_offer,
         'negotiated_order': negotiated_order,

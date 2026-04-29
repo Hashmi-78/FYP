@@ -14,11 +14,11 @@
             </div>
 
             <div class="flex items-center gap-2 lg:gap-6">
-                <a href="{% url 'customers:ai_chatbot' %}"
+                <!-- <a href="{% url 'customers:ai_chatbot' %}"
                     class="hidden lg:flex items-center gap-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:shadow-lg transition">
                     <i class="fas fa-robot"></i>
                     <span>AI Assistant</span>
-                </a>
+                </a> -->
 
                 <form action="{% url 'products:list' %}" method="get"
                     class="hidden lg:flex items-center bg-gray-100 rounded-full px-4 py-2">
@@ -83,7 +83,7 @@
                 <button class="lg:hidden text-gray-700">
                     <i class="fas fa-bars text-xl"></i>
                 </button>
-            </div>
+            </div> 
         </div>
 
         <div class="flex items-center justify-between py-4">
@@ -92,8 +92,8 @@
                     Products</a>
                 <a href="{% url 'products:list' %}?sort=-created_at"
                     class="text-gray-700 font-medium hover:text-blue-600 transition">New Arrivals</a>
-                <a href="{% url 'products:list' %}?discount=true"
-                    class="text-gray-700 font-medium hover:text-blue-600 transition">Deals</a>
+                <!-- <a href="{% url 'products:list' %}?discount=true"
+                    class="text-gray-700 font-medium hover:text-blue-600 transition">Deals</a> -->
 
                 <a href="{% url 'customers:ai_search' %}"
                     class="hidden lg:flex items-center gap-2 text-purple-600 font-medium hover:text-purple-700 transition">

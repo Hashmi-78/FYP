@@ -1,39 +1,18 @@
 from django import forms
-from django.db import IntegrityError, transaction
-from django.utils.text import slugify
+from .models import Product, Category
 
-from .models import Category, Product
-
-
-class NegotiationOfferForm(forms.Form):
-    offer = forms.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        min_value=0,
-        widget=forms.NumberInput(
-            attrs={
-                'class': 'w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none',
-                'placeholder': 'Enter your offer',
-                'step': '0.01',
-            }
-        ),
-    )
 
 class ProductForm(forms.ModelForm):
+
+    # Optional field — if filled, creates a new category instead of using dropdown
     new_category = forms.CharField(
         required=False,
-        widget=forms.TextInput(
-            attrs={
-                'class': 'w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none',
-                'placeholder': 'Or type a new category name',
-            }
-        ),
+        widget=forms.TextInput(attrs={
+            'class': 'w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none mt-2',
+            'placeholder': 'Or type a new category name here...'
+        }),
+        label='Create New Category'
     )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if 'category' in self.fields:
-            self.fields['category'].queryset = Category.objects.filter(is_active=True)
 
     class Meta:
         model = Product
@@ -67,34 +46,39 @@ class ProductForm(forms.ModelForm):
             })
         }
 
-    def save(self, commit=True):
-        instance = super().save(commit=False)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make category not required since seller may use new_category instead
+        self.fields['category'].required = False
 
-        new_category_name = (self.cleaned_data.get('new_category') or '').strip()
-        if new_category_name:
-            existing = Category.objects.filter(name__iexact=new_category_name).first()
-            if existing:
-                instance.category = existing
-            else:
-                base_slug = slugify(new_category_name) or 'category'
-                slug = base_slug
-                i = 2
-                while Category.objects.filter(slug=slug).exists():
-                    slug = f"{base_slug}-{i}"
-                    i += 1
+    def clean(self):
+        cleaned_data = super().clean()
+        category = cleaned_data.get('category')
+        new_category = cleaned_data.get('new_category', '').strip()
 
-                try:
-                    with transaction.atomic():
-                        instance.category = Category.objects.create(
-                            name=new_category_name,
-                            slug=slug,
-                            is_active=True,
-                        )
-                except IntegrityError:
-                    instance.category = Category.objects.filter(name__iexact=new_category_name).first()
+        if not category and not new_category:
+            raise forms.ValidationError(
+                'Please select an existing category or enter a new category name.'
+            )
 
-        if commit:
-            instance.save()
-            self.save_m2m()
-        return instance
+        if new_category:
+            # Get or create the category — if it already exists reuse it
+            category_obj, created = Category.objects.get_or_create(
+                name__iexact=new_category,
+                defaults={'name': new_category}
+            )
+            cleaned_data['category'] = category_obj
 
+        return cleaned_data
+
+class NegotiationOfferForm(forms.Form):
+    offer = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none',
+            'placeholder': 'Enter your offer price',
+            'step': '0.01',
+            'min': '0'
+        })
+    )

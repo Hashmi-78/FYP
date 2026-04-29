@@ -79,10 +79,16 @@
           <div>
             <label class="block text-blue-900 font-semibold mb-2">Category *</label>
             {{ form.category }}
+            <p class="text-xs text-gray-400 my-2 text-center font-semibold tracking-wide uppercase">
+              — or create a new one —
+            </p>
             {{ form.new_category }}
-            {% if form.category.help_text %}
-            <p class="mt-1 text-sm text-gray-500">{{ form.category.help_text }}</p>
+            {% if form.new_category.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ form.new_category.errors.0 }}</p>
             {% endif %}
+            <p class="mt-1 text-xs text-gray-400">
+              Leave both empty to see an error. Fill either the dropdown or the text field above.
+            </p>
           </div>
         </div>
 

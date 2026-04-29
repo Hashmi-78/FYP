@@ -737,3 +737,18 @@ def payment_view(request):
     return render(request, 'sellers/payment.html', context)
 
 
+@login_required
+def product_preview_view(request, pk):
+    """
+    Seller-side preview of their own product.
+    Does NOT require is_available=True so draft/inactive products are also visible.
+    Only accessible by the seller who owns the product.
+    """
+    from products.models import Product
+    product = get_object_or_404(Product, pk=pk, seller=request.user)
+    context = {
+        'product': product,
+    }
+    return render(request, 'sellers/product_preview.html', context)
+
+

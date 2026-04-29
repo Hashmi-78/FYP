@@ -466,16 +466,20 @@ def checkout_view(request):
                     )
                     
                     # Create Order Items
+                    # Create Order Items and reduce stock
                     for item in items:
                         OrderItem.objects.create(
-                            order=order,
-                            product=item.product,
-                            product_name=item.product.name,
-                            product_sku=item.product.sku,
-                            product_image=item.product.main_image,
-                            price=item.product.get_discount_price(),
-                            quantity=item.quantity
+                        order=order,
+                        product=item.product,
+                        product_name=item.product.name,
+                        product_sku=item.product.sku,
+                        product_image=item.product.main_image,
+                        price=item.product.get_discount_price(),
+                        quantity=item.quantity
                         )
+                    # Reduce stock
+                    item.product.stock = max(0, item.product.stock - item.quantity)
+                    item.product.save(update_fields=['stock'])
                 
                 # Clear Cart
                 cart.items.all().delete()
@@ -593,7 +597,8 @@ def checkout_with_negotiation(request, order_id):
                     price=refreshed.negotiated_price,
                     quantity=1,
                 )
-
+                product.stock = max(0, product.stock - 1)
+                product.save(update_fields=['stock'])
                 refreshed.status = NegotiatedOrder.STATUS_COMPLETED
                 refreshed.save(update_fields=['status'])
 

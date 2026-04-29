@@ -52,10 +52,10 @@
           {% endif %}
           Profile
         </a>
-        <a href="{% url 'sellers:add_product' %}"
+        <!-- <a href="{% url 'sellers:add_product' %}"
           class="bg-blue-900 text-white px-6 py-3 rounded-lg hover:bg-blue-800 transition flex items-center gap-2">
           <i class="fas fa-plus"></i> Add Product
-        </a>
+        </a> -->
       </div>
     </div>
 
@@ -239,7 +239,7 @@
 
           <!-- Actions -->
           <div class="flex gap-2">
-            <a href="{% url 'products:detail' product.slug %}" target="_blank"
+            <a href="{% url 'sellers:product_preview' product.pk %}"
               class="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition text-center text-sm font-semibold">
               <i class="fas fa-eye"></i> View
             </a>

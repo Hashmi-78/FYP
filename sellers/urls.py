@@ -18,5 +18,6 @@ urlpatterns = [
     # Product Management
     path('add-product/', views.add_product_view, name='add_product'),
     path('edit-product/<int:pk>/', views.edit_product_view, name='edit_product'), # Added this
+    path('product-preview/<int:pk>/', views.product_preview_view, name='product_preview'),
     path('bulk-delete/', views.bulk_delete_products_view, name='bulk_delete_products'), # Added this (FIX)
 ]
