@@ -65,13 +65,16 @@ def _describe_image(image: Image.Image) -> str:
 
 def find_similar_products(uploaded_image: Image.Image, top_k: int = 6):
     from products.models import Product
-    from django.db.models import Q
 
-    # Common English stop words to ignore
+    # Broad stop words — generic terms that match everything and mean nothing
     STOP_WORDS = {
         'the', 'and', 'for', 'with', 'this', 'that', 'from',
         'are', 'was', 'has', 'have', 'its', 'into', 'onto',
-        'very', 'also', 'some', 'such', 'than', 'then'
+        'very', 'also', 'some', 'such', 'than', 'then',
+        # Generic product words that cause false positives
+        'product', 'item', 'good', 'nice', 'quality', 'design',
+        'style', 'color', 'image', 'photo', 'picture', 'looking',
+        'high', 'new', 'best', 'top', 'great', 'big', 'small',
     }
 
     description = _describe_image(uploaded_image)
@@ -85,6 +88,8 @@ def find_similar_products(uploaded_image: Image.Image, top_k: int = 6):
         if len(word.strip()) > 2 and word.strip().lower() not in STOP_WORDS
     ]
 
+    logger.info('Filtered keywords: %s', keywords)
+
     if not keywords:
         return [], description
 
@@ -97,7 +102,7 @@ def find_similar_products(uploaded_image: Image.Image, top_k: int = 6):
 
     scored = []
     for product in all_products:
-        # Build a single searchable text blob from all product fields
+        # Build searchable text blob from all product fields
         searchable = ' '.join([
             product.name or '',
             product.description or '',
@@ -105,13 +110,15 @@ def find_similar_products(uploaded_image: Image.Image, top_k: int = 6):
             product.category.name if product.category else '',
         ]).lower()
 
-        # Count how many keywords appear in this product's text
+        # Count keyword hits
         score = sum(1 for kw in keywords if kw in searchable)
 
-        if score > 0:
+        # Must match at least 40% of keywords AND minimum 2 absolute hits
+        min_required = max(2, int(len(keywords) * 0.4))
+        if score >= min_required:
             scored.append((product, score))
 
-    # Sort by score descending — most keyword matches first
+    # Sort by score descending
     scored.sort(key=lambda x: x[1], reverse=True)
 
     matched_products = [p for p, score in scored[:top_k]]

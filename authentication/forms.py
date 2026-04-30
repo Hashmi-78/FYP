@@ -57,15 +57,23 @@ class UserRegistrationForm(UserCreationForm):
         return username
 
     def clean_password2(self):
-        password = self.cleaned_data.get('password2')
-        if password:
-            if len(password) < 8:
-                raise forms.ValidationError('Password must be at least 8 characters.')
-            if not any(c.isdigit() for c in password):
-                raise forms.ValidationError('Password must contain at least one number.')
-            if not any(c.isupper() for c in password):
-                raise forms.ValidationError('Password must contain at least one uppercase letter.')
-        return password
+        password1 = self.cleaned_data.get('password1')
+        password2 = self.cleaned_data.get('password2')
+
+        if password1 and password2 and password1 != password2:
+            raise forms.ValidationError('Passwords do not match. Please make sure both passwords are identical.')
+
+        if password2:
+            if len(password2) < 8:
+                raise forms.ValidationError('Password is too short. It must be at least 8 characters long.')
+            if not any(c.isdigit() for c in password2):
+                raise forms.ValidationError('Password must contain at least one number (0-9).')
+            if not any(c.isupper() for c in password2):
+                raise forms.ValidationError('Password must contain at least one uppercase letter (A-Z).')
+            if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?/~`' for c in password2):
+                raise forms.ValidationError('Password must contain at least one special character e.g. !@#$%^&*')
+
+        return password2
 
 
 class UserLoginForm(AuthenticationForm):
